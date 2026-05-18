@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -6,6 +6,10 @@ class LineageResult(BaseModel):
     """Lineage extracted from a single SQL query."""
     target_table: Optional[str] = Field(None, description="Table being written to (INSERT/UPDATE/CREATE)")
     source_tables: List[str] = Field(default_factory=list, description="Tables read by the query")
+    column_lineage: Optional[Dict[str, List[str]]] = Field(
+        None,
+        description="Column-level lineage mapping: {output_column: [source_table.column, ...]}"
+    )
 
 
 class LineageRequest(BaseModel):

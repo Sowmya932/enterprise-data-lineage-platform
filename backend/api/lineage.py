@@ -23,11 +23,15 @@ def parse_sql(request: LineageRequest):
             raw_sql=request.sql
         )
 
+    col_lineage_result = parser.extract_column_lineage(request.sql)
+    column_lineage = col_lineage_result.get("column_lineage") if "error" not in col_lineage_result else None
+
     return LineageResponse(
         success=True,
         lineage=LineageResult(
             target_table=result["target_table"],
-            source_tables=result["source_tables"]
+            source_tables=result["source_tables"],
+            column_lineage=column_lineage,
         ),
         raw_sql=request.sql
     )
