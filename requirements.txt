@@ -6,3 +6,4 @@ alembic
 sqlglot
 pydantic
 python-dotenv
+python-multipart
