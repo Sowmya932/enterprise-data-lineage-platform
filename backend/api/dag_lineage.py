@@ -18,11 +18,14 @@ POST /dag-sql-lineage
 """
 
 import ast as _ast
+import logging
 from pathlib import Path
 from typing import Dict, List
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy.orm import Session
 
+from backend.database.db import get_db
 from backend.models.lineage_models import (
     DAGFullLineage,
     DAGLineageNode,
@@ -32,6 +35,9 @@ from backend.models.lineage_models import (
 )
 from backend.parsers.dag_parser import DAGParser
 from backend.parsers.sql_parser import SQLParser
+from backend.services.dag_service import save_dag_metadata
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="", tags=["DAG Lineage"])
 
@@ -53,12 +59,24 @@ _sql_parser = SQLParser()
         "**dag_content** (Python source code)."
     ),
 )
-def parse_dag(request: DAGParseRequest) -> DAGParseResponse:
+def parse_dag(request: DAGParseRequest, db: Session = Depends(get_db)) -> DAGParseResponse:
     try:
         if request.dag_file_path:
             result = _dag_parser.parse_file(request.dag_file_path)
         else:
             result = _dag_parser.parse_source(request.dag_content)  # type: ignore[arg-type]
+
+        # Persist to PostgreSQL
+        if result.get("dag"):
+            try:
+                save_dag_metadata(
+                    db,
+                    dag_id=result["dag"],
+                    tasks=result.get("tasks") or [],
+                    dependencies=result.get("dependencies") or [],
+                )
+            except Exception:
+                logger.warning("Could not persist DAG metadata to database", exc_info=True)
 
         return DAGParseResponse(success=True, metadata=DAGMetadata(**result))
 
@@ -81,7 +99,7 @@ def parse_dag(request: DAGParseRequest) -> DAGParseResponse:
         "The server parses the file and returns DAG metadata."
     ),
 )
-async def parse_dag_upload(file: UploadFile = File(...)) -> DAGParseResponse:
+async def parse_dag_upload(file: UploadFile = File(...), db: Session = Depends(get_db)) -> DAGParseResponse:
     if not (file.filename or "").endswith(".py"):
         raise HTTPException(
             status_code=400,
@@ -92,6 +110,19 @@ async def parse_dag_upload(file: UploadFile = File(...)) -> DAGParseResponse:
         raw_bytes = await file.read()
         source = raw_bytes.decode("utf-8")
         result = _dag_parser.parse_source(source, source_name=file.filename or "<upload>")
+
+        # Persist to PostgreSQL
+        if result.get("dag"):
+            try:
+                save_dag_metadata(
+                    db,
+                    dag_id=result["dag"],
+                    tasks=result.get("tasks") or [],
+                    dependencies=result.get("dependencies") or [],
+                )
+            except Exception:
+                logger.warning("Could not persist uploaded DAG metadata to database", exc_info=True)
+
         return DAGParseResponse(success=True, metadata=DAGMetadata(**result))
 
     except UnicodeDecodeError as exc:
@@ -119,7 +150,7 @@ async def parse_dag_upload(file: UploadFile = File(...)) -> DAGParseResponse:
         "Produces an end-to-end lineage view: **DAG task → SQL → table**."
     ),
 )
-def dag_sql_lineage(request: DAGParseRequest) -> DAGFullLineage:
+def dag_sql_lineage(request: DAGParseRequest, db: Session = Depends(get_db)) -> DAGFullLineage:
     # ── 1. Parse the DAG ─────────────────────────────────────────────
     try:
         if request.dag_file_path:
@@ -131,13 +162,25 @@ def dag_sql_lineage(request: DAGParseRequest) -> DAGFullLineage:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {exc}") from exc
 
-    # ── 2. Read source text for SQL snippet extraction ────────────────
+    # ── 2. Persist DAG to PostgreSQL ──────────────────────────────────
+    if dag_meta.get("dag"):
+        try:
+            save_dag_metadata(
+                db,
+                dag_id=dag_meta["dag"],
+                tasks=dag_meta.get("tasks") or [],
+                dependencies=dag_meta.get("dependencies") or [],
+            )
+        except Exception:
+            logger.warning("Could not persist DAG-SQL lineage metadata to database", exc_info=True)
+
+    # ── 3. Read source text for SQL snippet extraction ────────────────
     source_text = _read_source(request)
 
-    # ── 3. Map task_id → SQL snippets found inside the DAG source ─────
+    # ── 4. Map task_id → SQL snippets found inside the DAG source ─────
     task_sql_map: Dict[str, List[str]] = _extract_task_sql_snippets(source_text)
 
-    # ── 4. For each task, run SQLParser to get source/target tables ───
+    # ── 5. For each task, run SQLParser to get source/target tables ───
     lineage_nodes: List[DAGLineageNode] = []
     for task_id in dag_meta.get("tasks", []):
         sql_queries = task_sql_map.get(task_id, [])
