@@ -5,13 +5,17 @@ Reusable service functions for persisting and fetching SQL lineage metadata.
 
 Functions
 ---------
-    save_lineage_metadata  – persist a parsed lineage result to PostgreSQL
-    fetch_lineage_metadata – retrieve all lineage relationships from PostgreSQL
+    save_lineage_metadata      – persist a parsed lineage result to PostgreSQL
+    save_lineage_relationship  – persist a single validated lineage edge
+    fetch_lineage_metadata     – retrieve all lineage relationships from PostgreSQL
+    fetch_relationships_for_table – direct relationships for a specific table
+    fetch_tables               – retrieve all catalogued table records
 """
 
 import logging
 from typing import Dict, List, Optional
 
+from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -161,6 +165,148 @@ def fetch_tables(db: Session) -> List[Dict]:
         return [r.to_dict() for r in records]
     except Exception:
         logger.exception("Failed to fetch tables")
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Single relationship save  (with circular dependency protection)
+# ---------------------------------------------------------------------------
+
+def save_lineage_relationship(
+    db: Session,
+    *,
+    source_table: str,
+    target_table: str,
+    column_name: Optional[str] = None,
+    source_column: Optional[str] = None,
+    dag_id: Optional[str] = None,
+) -> Dict:
+    """
+    Persist a single lineage edge after validating it will not create a cycle.
+
+    Parameters
+    ----------
+    db            : active SQLAlchemy session
+    source_table  : data origin table name
+    target_table  : data destination table name
+    column_name   : target column name (optional)
+    source_column : source column name (optional)
+    dag_id        : DAG identifier that produced this lineage (optional)
+
+    Returns
+    -------
+    dict representation of the saved ``LineageRelationship`` row.
+
+    Raises
+    ------
+    HTTPException 400  – if source_table == target_table
+    HTTPException 409  – if the edge would create a circular dependency
+    """
+    logger.info(
+        "Saving lineage relationship | %s → %s (dag=%s)",
+        source_table,
+        target_table,
+        dag_id,
+    )
+
+    # ------------------------------------------------------------------
+    # Validation: identical tables
+    # ------------------------------------------------------------------
+    if source_table.strip().lower() == target_table.strip().lower():
+        raise HTTPException(
+            status_code=400,
+            detail=f"source_table and target_table must differ (both are '{source_table}').",
+        )
+
+    # ------------------------------------------------------------------
+    # Validation: circular dependency check (WITH RECURSIVE)
+    # ------------------------------------------------------------------
+    try:
+        from backend.lineage.graph_service import LineageGraphService
+
+        if LineageGraphService().has_circular_dependency(db, source_table, target_table):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Adding {source_table} → {target_table} would create a "
+                    "circular dependency in the lineage graph."
+                ),
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception(
+            "Circular dependency check failed | %s → %s", source_table, target_table
+        )
+        raise
+
+    # ------------------------------------------------------------------
+    # Persist the edge
+    # ------------------------------------------------------------------
+    try:
+        edge = LineageRelationship(
+            source_table=source_table,
+            target_table=target_table,
+            column_name=column_name,
+            source_column=source_column,
+            dag_id=dag_id,
+        )
+        db.add(edge)
+        db.commit()
+        db.refresh(edge)
+        logger.info(
+            "Lineage relationship saved | id=%d %s → %s",
+            edge.id,
+            source_table,
+            target_table,
+        )
+        return edge.to_dict()
+
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Failed to save lineage relationship | %s → %s", source_table, target_table
+        )
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Fetch relationships for a specific table
+# ---------------------------------------------------------------------------
+
+def fetch_relationships_for_table(db: Session, table_name: str) -> List[Dict]:
+    """
+    Retrieve all direct lineage relationships where *table_name* appears as
+    either source or target.
+
+    Parameters
+    ----------
+    db         : active SQLAlchemy session
+    table_name : table to look up
+
+    Returns
+    -------
+    List of dicts from ``LineageRelationship.to_dict()``.
+    """
+    logger.debug("Fetching relationships for table=%s", table_name)
+    try:
+        records = (
+            db.query(LineageRelationship)
+            .filter(
+                (LineageRelationship.source_table == table_name)
+                | (LineageRelationship.target_table == table_name)
+            )
+            .order_by(
+                LineageRelationship.source_table,
+                LineageRelationship.target_table,
+            )
+            .all()
+        )
+        return [r.to_dict() for r in records]
+    except Exception:
+        logger.exception(
+            "Failed to fetch relationships for table=%s", table_name
+        )
         raise
 
 

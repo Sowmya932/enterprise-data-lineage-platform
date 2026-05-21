@@ -134,6 +134,8 @@ class LineageRelationship(Base):
     target_table = Column(String(255), nullable=False, index=True)
     column_name = Column(String(255), nullable=True)
     source_column = Column(String(255), nullable=True)
+    # Optional: DAG that produced this lineage edge (string dag_id, not FK)
+    dag_id = Column(String(255), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     def to_dict(self) -> dict:
@@ -143,6 +145,7 @@ class LineageRelationship(Base):
             "target_table": self.target_table,
             "column_name": self.column_name,
             "source_column": self.source_column,
+            "dag_id": self.dag_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 

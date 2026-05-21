@@ -22,9 +22,15 @@ app = FastAPI(
         "REST API for SQL and Airflow DAG lineage extraction. "
         "Parse SQL queries and Airflow DAG files to trace data flow "
         "from source tables through transformations to target tables. "
-        "All parsed metadata is persisted to PostgreSQL for unified querying."
+        "All parsed metadata is persisted to PostgreSQL for unified querying.\n\n"
+        "**Week 2 Day 1 additions**\n"
+        "- `POST /lineage-relationship` – store a validated lineage edge\n"
+        "- `GET /upstream/{table_name}` – recursive upstream lineage (WITH RECURSIVE)\n"
+        "- `GET /downstream/{table_name}` – recursive downstream lineage\n"
+        "- `GET /lineage-graph` – full dependency graph (nodes + edges)\n"
+        "- Circular dependency protection on every new edge write"
     ),
-    version="2.0.0",
+    version="2.1.0",
 )
 
 app.include_router(lineage_router)
