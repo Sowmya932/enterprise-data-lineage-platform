@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from backend.database.orm_models import (
     ColumnRecord,
+    ColumnLineage,
     LineageRelationship,
     TableRecord,
 )
@@ -320,3 +321,93 @@ def _split_table_name(raw: str):
         parts = raw.split(".", 1)
         return parts[0], parts[1]
     return None, raw
+
+
+# ---------------------------------------------------------------------------
+# Column-level lineage
+# ---------------------------------------------------------------------------
+
+def save_column_lineage(
+    db: Session,
+    *,
+    source_table: str,
+    source_column: str,
+    target_table: str,
+    target_column: str,
+    transformation: Optional[str] = None,
+    dag_id: Optional[str] = None,
+) -> Dict:
+    """
+    Persist a single column-level lineage edge.
+
+    Parameters
+    ----------
+    db                : active SQLAlchemy session
+    source_table      : data-origin table
+    source_column     : data-origin column
+    target_table      : data-destination table
+    target_column     : data-destination column
+    transformation    : SQL expression that derives target_column (optional)
+    dag_id            : DAG identifier that produces this lineage (optional)
+
+    Returns
+    -------
+    dict representation of the saved ``ColumnLineage`` row.
+
+    Raises
+    ------
+    HTTPException 400 – if source == target (both table and column identical)
+    HTTPException 409 – if the edge already exists (unique constraint violation)
+    """
+    logger.info(
+        "Saving column lineage | %s.%s → %s.%s (dag=%s)",
+        source_table, source_column, target_table, target_column, dag_id,
+    )
+
+    if (
+        source_table.strip().lower() == target_table.strip().lower()
+        and source_column.strip().lower() == target_column.strip().lower()
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"source and target must differ "
+                f"(both are '{source_table}.{source_column}')."
+            ),
+        )
+
+    try:
+        edge = ColumnLineage(
+            source_table=source_table,
+            source_column=source_column,
+            target_table=target_table,
+            target_column=target_column,
+            transformation=transformation,
+            dag_id=dag_id,
+        )
+        db.add(edge)
+        db.commit()
+        db.refresh(edge)
+        logger.info(
+            "Column lineage saved | id=%d %s.%s → %s.%s",
+            edge.id, source_table, source_column, target_table, target_column,
+        )
+        return edge.to_dict()
+    except HTTPException:
+        raise
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Column lineage edge {source_table}.{source_column} → "
+                f"{target_table}.{target_column} already exists."
+            ),
+        )
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Failed to save column lineage | %s.%s → %s.%s",
+            source_table, source_column, target_table, target_column,
+        )
+        raise

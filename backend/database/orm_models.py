@@ -173,3 +173,59 @@ class TaskDependency(Base):
             "downstream_task": self.downstream_task,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class ColumnLineage(Base):
+    """
+    A directed column-level lineage edge.
+
+    Captures the exact column-to-column data flow:
+        source_table.source_column  →  target_table.target_column
+
+    The optional ``transformation`` field stores the SQL expression that
+    derives the target column (e.g. ``SUM(orders.amount)``, ``COALESCE(a, b)``).
+
+    ``transformation_type`` classifies the derivation:
+        DIRECT        – plain column copy / rename
+        ALIAS         – column exposed under a different name (AS clause)
+        AGGREGATE_SUM – SUM(...)
+        AGGREGATE_COUNT – COUNT(...)
+        AGGREGATE_AVG – AVG(...)
+        AGGREGATE_MAX – MAX(...)
+        AGGREGATE_MIN – MIN(...)
+        CASE_WHEN     – CASE WHEN ... END expression
+        DERIVED       – any other computed expression
+    """
+
+    __tablename__ = "column_lineage"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_table", "source_column", "target_table", "target_column",
+            name="uq_column_lineage_edge",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_table = Column(String(255), nullable=False, index=True)
+    source_column = Column(String(255), nullable=False, index=True)
+    target_table = Column(String(255), nullable=False, index=True)
+    target_column = Column(String(255), nullable=False, index=True)
+    transformation = Column(Text, nullable=True)
+    transformation_type = Column(
+        String(32), nullable=False, default="DIRECT", server_default="DIRECT"
+    )
+    dag_id = Column(String(255), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "source_table": self.source_table,
+            "source_column": self.source_column,
+            "target_table": self.target_table,
+            "target_column": self.target_column,
+            "transformation": self.transformation,
+            "transformation_type": self.transformation_type,
+            "dag_id": self.dag_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

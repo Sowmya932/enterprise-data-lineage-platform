@@ -2,6 +2,7 @@ import logging
 
 from fastapi import FastAPI
 
+from backend.api.column_lineage import router as column_lineage_router
 from backend.api.dag_lineage import router as dag_lineage_router
 from backend.api.lineage import router as lineage_router
 from backend.api.metadata import router as metadata_router
@@ -28,14 +29,20 @@ app = FastAPI(
         "- `GET /upstream/{table_name}` – recursive upstream lineage (WITH RECURSIVE)\n"
         "- `GET /downstream/{table_name}` – recursive downstream lineage\n"
         "- `GET /lineage-graph` – full dependency graph (nodes + edges)\n"
-        "- Circular dependency protection on every new edge write"
+        "- Circular dependency protection on every new edge write\n\n"
+        "**Column Lineage additions**\n"
+        "- `POST /column/parse-sql` – parse SQL and save column-level edges with transformation types\n"
+        "- `GET /column/upstream/{column_name}` – recursive cross-table column upstream\n"
+        "- `GET /column/downstream/{column_name}` – recursive cross-table column downstream\n"
+        "- `GET /column/transformations` – transformation type distribution summary"
     ),
-    version="2.1.0",
+    version="2.2.0",
 )
 
 app.include_router(lineage_router)
 app.include_router(dag_lineage_router)
 app.include_router(metadata_router)
+app.include_router(column_lineage_router)
 
 
 @app.on_event("startup")

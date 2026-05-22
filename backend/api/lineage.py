@@ -14,9 +14,14 @@ from backend.models.lineage_models import (
     LineageResponse,
     LineageResult,
     UpstreamLineageResponse,
+    ColumnLineageCreate,
+    ColumnLineageResponse,
+    ColumnUpstreamResponse,
+    ColumnDownstreamResponse,
 )
 from backend.parsers.sql_parser import SQLParser
 from backend.services.lineage_service import (
+    save_column_lineage,
     save_lineage_metadata,
     save_lineage_relationship,
 )
@@ -236,3 +241,129 @@ def get_lineage_graph(db: Session = Depends(get_db)) -> DependencyGraphResponse:
     except Exception:
         logger.exception("Error fetching full lineage graph")
         raise HTTPException(status_code=500, detail="Failed to fetch lineage graph.")
+
+
+# ============================================================
+# POST /column-lineage  – store a column-level lineage edge
+# ============================================================
+
+@router.post(
+    "/column-lineage",
+    response_model=ColumnLineageResponse,
+    status_code=201,
+    summary="Create a column-level lineage edge",
+    description=(
+        "Persist a single directed column-level lineage edge "
+        "(source_table.source_column → target_table.target_column). "
+        "An optional SQL transformation expression can be stored with the edge."
+    ),
+)
+def create_column_lineage(
+    request: ColumnLineageCreate,
+    db: Session = Depends(get_db),
+) -> ColumnLineageResponse:
+    """Store a column-level lineage edge in PostgreSQL."""
+    try:
+        record = save_column_lineage(
+            db,
+            source_table=request.source_table,
+            source_column=request.source_column,
+            target_table=request.target_table,
+            target_column=request.target_column,
+            transformation=request.transformation,
+            dag_id=request.dag_id,
+        )
+        return ColumnLineageResponse(**record)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to create column lineage edge")
+        raise HTTPException(status_code=500, detail="Internal server error.")
+
+
+# ============================================================
+# GET /column-upstream/{table_name}/{column_name}
+# ============================================================
+
+@router.get(
+    "/column-upstream/{table_name}/{column_name}",
+    response_model=ColumnUpstreamResponse,
+    summary="Get column-level upstream lineage",
+    description=(
+        "Recursively traverse all column-level sources that feed into "
+        "table_name.column_name using a PostgreSQL WITH RECURSIVE CTE. "
+        "Returns each hop's source/target columns and optional transformation."
+    ),
+)
+def get_column_upstream(
+    table_name: str,
+    column_name: str,
+    max_depth: int = Query(
+        default=10,
+        ge=1,
+        le=50,
+        description="Maximum number of upstream column hops to traverse (1–50).",
+    ),
+    db: Session = Depends(get_db),
+) -> ColumnUpstreamResponse:
+    """Recursively fetch all column-level sources for table_name.column_name."""
+    try:
+        result = _graph_service.fetch_column_upstream(
+            db, table_name, column_name, max_depth=max_depth
+        )
+        return ColumnUpstreamResponse(**result)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception(
+            "Error fetching column upstream | table=%s column=%s",
+            table_name, column_name,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch column upstream for '{table_name}.{column_name}'.",
+        )
+
+
+# ============================================================
+# GET /column-downstream/{table_name}/{column_name}
+# ============================================================
+
+@router.get(
+    "/column-downstream/{table_name}/{column_name}",
+    response_model=ColumnDownstreamResponse,
+    summary="Get column-level downstream lineage",
+    description=(
+        "Recursively traverse all column-level targets that depend on "
+        "table_name.column_name using a PostgreSQL WITH RECURSIVE CTE. "
+        "Returns each hop's source/target columns and optional transformation."
+    ),
+)
+def get_column_downstream(
+    table_name: str,
+    column_name: str,
+    max_depth: int = Query(
+        default=10,
+        ge=1,
+        le=50,
+        description="Maximum number of downstream column hops to traverse (1–50).",
+    ),
+    db: Session = Depends(get_db),
+) -> ColumnDownstreamResponse:
+    """Recursively fetch all column-level dependents of table_name.column_name."""
+    try:
+        result = _graph_service.fetch_column_downstream(
+            db, table_name, column_name, max_depth=max_depth
+        )
+        return ColumnDownstreamResponse(**result)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception(
+            "Error fetching column downstream | table=%s column=%s",
+            table_name, column_name,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch column downstream for '{table_name}.{column_name}'.",
+        )

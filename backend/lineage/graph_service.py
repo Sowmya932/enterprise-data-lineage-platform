@@ -482,5 +482,329 @@ class LineageGraphService:
             logger.exception("Failed to fetch full dependency graph")
             raise
 
+    # ------------------------------------------------------------------
+    # Column-level upstream traversal  (source_col ← target_col)
+    # ------------------------------------------------------------------
+
+    def fetch_column_upstream(
+        self,
+        db: Session,
+        table_name: str,
+        column_name: str,
+        max_depth: int = _DEFAULT_MAX_DEPTH,
+    ) -> Dict:
+        """
+        Return all column-level sources that feed into *table_name.column_name*.
+
+        Uses PostgreSQL WITH RECURSIVE on PostgreSQL, Python BFS otherwise.
+        """
+        logger.info(
+            "Fetching column upstream | table=%s column=%s max_depth=%d dialect=%s",
+            table_name, column_name, max_depth, _dialect(db),
+        )
+        if _dialect(db) == "postgresql":
+            return self._col_upstream_pg(db, table_name, column_name, max_depth)
+        return self._col_upstream_python(db, table_name, column_name, max_depth)
+
+    def _col_upstream_pg(
+        self, db: Session, table_name: str, column_name: str, max_depth: int
+    ) -> Dict:
+        """PostgreSQL WITH RECURSIVE column-level upstream traversal."""
+        try:
+            sql = text(
+                """
+                WITH RECURSIVE col_upstream AS (
+                    SELECT
+                        cl.source_table,
+                        cl.source_column,
+                        cl.target_table,
+                        cl.target_column,
+                        cl.transformation,
+                        cl.dag_id,
+                        1                                                    AS depth,
+                        ARRAY[cl.source_table || '.' || cl.source_column]    AS visited_path
+                    FROM column_lineage cl
+                    WHERE cl.target_table  = :table_name
+                      AND cl.target_column = :column_name
+
+                    UNION ALL
+
+                    SELECT
+                        cl.source_table,
+                        cl.source_column,
+                        cl.target_table,
+                        cl.target_column,
+                        cl.transformation,
+                        cl.dag_id,
+                        cu.depth + 1,
+                        cu.visited_path || (cl.source_table || '.' || cl.source_column)
+                    FROM column_lineage cl
+                    JOIN col_upstream cu
+                      ON cl.target_table  = cu.source_table
+                     AND cl.target_column = cu.source_column
+                    WHERE cu.depth < :max_depth
+                      AND NOT (
+                            (cl.source_table || '.' || cl.source_column) = ANY(cu.visited_path)
+                          )
+                )
+                SELECT source_table, source_column, target_table, target_column,
+                       transformation, dag_id, depth
+                FROM col_upstream
+                ORDER BY depth, source_table, source_column;
+                """
+            )
+            rows = db.execute(
+                sql,
+                {"table_name": table_name, "column_name": column_name, "max_depth": max_depth},
+            ).fetchall()
+            chain = [
+                {
+                    "source_table": r.source_table,
+                    "source_column": r.source_column,
+                    "target_table": r.target_table,
+                    "target_column": r.target_column,
+                    "transformation": r.transformation,
+                    "dag_id": r.dag_id,
+                    "depth": r.depth,
+                }
+                for r in rows
+            ]
+            return self._col_upstream_result(table_name, column_name, max_depth, chain)
+        except Exception:
+            logger.exception(
+                "PG column upstream query failed | table=%s column=%s",
+                table_name, column_name,
+            )
+            raise
+
+    def _col_upstream_python(
+        self, db: Session, table_name: str, column_name: str, max_depth: int
+    ) -> Dict:
+        """Python BFS column-level upstream traversal (dialect-agnostic fallback)."""
+        from backend.database.orm_models import ColumnLineage
+
+        visited_edges: set = set()
+        chain: List[Dict] = []
+        queue: deque = deque([((table_name, column_name), 0)])
+        visited_cols: set = {(table_name, column_name)}
+
+        while queue:
+            (cur_table, cur_col), depth = queue.popleft()
+            if depth >= max_depth:
+                continue
+            edges = (
+                db.query(ColumnLineage)
+                .filter(
+                    ColumnLineage.target_table == cur_table,
+                    ColumnLineage.target_column == cur_col,
+                )
+                .all()
+            )
+            for e in edges:
+                key = (e.source_table, e.source_column, e.target_table, e.target_column)
+                if key not in visited_edges:
+                    visited_edges.add(key)
+                    chain.append(
+                        {
+                            "source_table": e.source_table,
+                            "source_column": e.source_column,
+                            "target_table": e.target_table,
+                            "target_column": e.target_column,
+                            "transformation": e.transformation,
+                            "dag_id": e.dag_id,
+                            "depth": depth + 1,
+                        }
+                    )
+                    src_pair = (e.source_table, e.source_column)
+                    if src_pair not in visited_cols:
+                        visited_cols.add(src_pair)
+                        queue.append((src_pair, depth + 1))
+
+        chain.sort(key=lambda x: (x["depth"], x["source_table"], x["source_column"]))
+        return self._col_upstream_result(table_name, column_name, max_depth, chain)
+
+    @staticmethod
+    def _col_upstream_result(
+        table_name: str, column_name: str, max_depth: int, chain: List[Dict]
+    ) -> Dict:
+        upstream_cols = sorted(
+            {f"{e['source_table']}.{e['source_column']}" for e in chain}
+        )
+        logger.info(
+            "Column upstream complete | table=%s column=%s edges=%d unique_sources=%d",
+            table_name, column_name, len(chain), len(upstream_cols),
+        )
+        return {
+            "table": table_name,
+            "column": column_name,
+            "direction": "upstream",
+            "depth_limit": max_depth,
+            "total_edges": len(chain),
+            "upstream_columns": upstream_cols,
+            "lineage_chain": chain,
+        }
+
+    # ------------------------------------------------------------------
+    # Column-level downstream traversal  (source_col → target_col)
+    # ------------------------------------------------------------------
+
+    def fetch_column_downstream(
+        self,
+        db: Session,
+        table_name: str,
+        column_name: str,
+        max_depth: int = _DEFAULT_MAX_DEPTH,
+    ) -> Dict:
+        """
+        Return all column-level targets that depend on *table_name.column_name*.
+
+        Uses PostgreSQL WITH RECURSIVE on PostgreSQL, Python BFS otherwise.
+        """
+        logger.info(
+            "Fetching column downstream | table=%s column=%s max_depth=%d dialect=%s",
+            table_name, column_name, max_depth, _dialect(db),
+        )
+        if _dialect(db) == "postgresql":
+            return self._col_downstream_pg(db, table_name, column_name, max_depth)
+        return self._col_downstream_python(db, table_name, column_name, max_depth)
+
+    def _col_downstream_pg(
+        self, db: Session, table_name: str, column_name: str, max_depth: int
+    ) -> Dict:
+        """PostgreSQL WITH RECURSIVE column-level downstream traversal."""
+        try:
+            sql = text(
+                """
+                WITH RECURSIVE col_downstream AS (
+                    SELECT
+                        cl.source_table,
+                        cl.source_column,
+                        cl.target_table,
+                        cl.target_column,
+                        cl.transformation,
+                        cl.dag_id,
+                        1                                                    AS depth,
+                        ARRAY[cl.target_table || '.' || cl.target_column]    AS visited_path
+                    FROM column_lineage cl
+                    WHERE cl.source_table  = :table_name
+                      AND cl.source_column = :column_name
+
+                    UNION ALL
+
+                    SELECT
+                        cl.source_table,
+                        cl.source_column,
+                        cl.target_table,
+                        cl.target_column,
+                        cl.transformation,
+                        cl.dag_id,
+                        cd.depth + 1,
+                        cd.visited_path || (cl.target_table || '.' || cl.target_column)
+                    FROM column_lineage cl
+                    JOIN col_downstream cd
+                      ON cl.source_table  = cd.target_table
+                     AND cl.source_column = cd.target_column
+                    WHERE cd.depth < :max_depth
+                      AND NOT (
+                            (cl.target_table || '.' || cl.target_column) = ANY(cd.visited_path)
+                          )
+                )
+                SELECT source_table, source_column, target_table, target_column,
+                       transformation, dag_id, depth
+                FROM col_downstream
+                ORDER BY depth, target_table, target_column;
+                """
+            )
+            rows = db.execute(
+                sql,
+                {"table_name": table_name, "column_name": column_name, "max_depth": max_depth},
+            ).fetchall()
+            chain = [
+                {
+                    "source_table": r.source_table,
+                    "source_column": r.source_column,
+                    "target_table": r.target_table,
+                    "target_column": r.target_column,
+                    "transformation": r.transformation,
+                    "dag_id": r.dag_id,
+                    "depth": r.depth,
+                }
+                for r in rows
+            ]
+            return self._col_downstream_result(table_name, column_name, max_depth, chain)
+        except Exception:
+            logger.exception(
+                "PG column downstream query failed | table=%s column=%s",
+                table_name, column_name,
+            )
+            raise
+
+    def _col_downstream_python(
+        self, db: Session, table_name: str, column_name: str, max_depth: int
+    ) -> Dict:
+        """Python BFS column-level downstream traversal (dialect-agnostic fallback)."""
+        from backend.database.orm_models import ColumnLineage
+
+        visited_edges: set = set()
+        chain: List[Dict] = []
+        queue: deque = deque([((table_name, column_name), 0)])
+        visited_cols: set = {(table_name, column_name)}
+
+        while queue:
+            (cur_table, cur_col), depth = queue.popleft()
+            if depth >= max_depth:
+                continue
+            edges = (
+                db.query(ColumnLineage)
+                .filter(
+                    ColumnLineage.source_table == cur_table,
+                    ColumnLineage.source_column == cur_col,
+                )
+                .all()
+            )
+            for e in edges:
+                key = (e.source_table, e.source_column, e.target_table, e.target_column)
+                if key not in visited_edges:
+                    visited_edges.add(key)
+                    chain.append(
+                        {
+                            "source_table": e.source_table,
+                            "source_column": e.source_column,
+                            "target_table": e.target_table,
+                            "target_column": e.target_column,
+                            "transformation": e.transformation,
+                            "dag_id": e.dag_id,
+                            "depth": depth + 1,
+                        }
+                    )
+                    tgt_pair = (e.target_table, e.target_column)
+                    if tgt_pair not in visited_cols:
+                        visited_cols.add(tgt_pair)
+                        queue.append((tgt_pair, depth + 1))
+
+        chain.sort(key=lambda x: (x["depth"], x["target_table"], x["target_column"]))
+        return self._col_downstream_result(table_name, column_name, max_depth, chain)
+
+    @staticmethod
+    def _col_downstream_result(
+        table_name: str, column_name: str, max_depth: int, chain: List[Dict]
+    ) -> Dict:
+        downstream_cols = sorted(
+            {f"{e['target_table']}.{e['target_column']}" for e in chain}
+        )
+        logger.info(
+            "Column downstream complete | table=%s column=%s edges=%d unique_targets=%d",
+            table_name, column_name, len(chain), len(downstream_cols),
+        )
+        return {
+            "table": table_name,
+            "column": column_name,
+            "direction": "downstream",
+            "depth_limit": max_depth,
+            "total_edges": len(chain),
+            "downstream_columns": downstream_cols,
+            "lineage_chain": chain,
+        }
+
 
 
