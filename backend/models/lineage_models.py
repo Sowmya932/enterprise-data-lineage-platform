@@ -416,3 +416,105 @@ class TransformationSummaryResponse(BaseModel):
     total_edges: int
     by_type: List[TransformationTypeStat] = Field(default_factory=list)
 
+
+# ============================================================
+# Impact Analysis models  (Week 2 Day 3)
+# ============================================================
+
+class ImpactedDAGDetail(BaseModel):
+    """One DAG entry in an impact analysis result."""
+
+    dag_id: str = Field(..., description="Airflow DAG identifier")
+    affected_table: str = Field(..., description="Downstream table touched by this DAG")
+    depth: int = Field(..., description="Hop distance from the change origin (0 = direct)")
+
+
+class ImpactedColumnDetail(BaseModel):
+    """One downstream column entry in an impact analysis result."""
+
+    table: str = Field(..., description="Table that owns the affected column")
+    column: str = Field(..., description="Column name")
+    transformation_type: str = Field(
+        ...,
+        description=(
+            "How the column is derived: DIRECT, ALIAS, AGGREGATE_SUM, "
+            "AGGREGATE_COUNT, AGGREGATE_AVG, AGGREGATE_MAX, AGGREGATE_MIN, "
+            "CASE_WHEN, or DERIVED"
+        ),
+    )
+    depth: int = Field(..., description="Hop distance from the change origin (1-indexed)")
+
+
+class TableImpactResponse(BaseModel):
+    """
+    Response for GET /impact/table/{table_name}.
+
+    Severity scale (based on unique affected downstream tables):
+        NONE     – 0
+        LOW      – 1-5
+        MEDIUM   – 6-15
+        HIGH     – 16-30
+        CRITICAL – 31+
+    """
+
+    source_table: str = Field(..., description="Table whose change is being assessed")
+    severity: str = Field(
+        ...,
+        description="Impact severity: NONE | LOW | MEDIUM | HIGH | CRITICAL",
+    )
+    affected_tables: List[str] = Field(
+        default_factory=list,
+        description="Sorted list of all downstream tables that will be affected",
+    )
+    impacted_dags: List[str] = Field(
+        default_factory=list,
+        description="Sorted list of distinct DAG IDs that must be re-evaluated",
+    )
+    total_edges: int = Field(..., description="Total lineage edges traversed")
+    depth_limit: int = Field(..., description="Maximum depth cap used in the query")
+    lineage_chain: List[RecursiveLineageEdge] = Field(
+        default_factory=list,
+        description="Full downstream edge chain ordered by depth",
+    )
+    dag_details: List[ImpactedDAGDetail] = Field(
+        default_factory=list,
+        description="Per-DAG breakdown of which table at which depth was affected",
+    )
+
+
+class ColumnImpactResponse(BaseModel):
+    """
+    Response for GET /impact/column/{column_name}.
+
+    When called without a specific source table the source_table field is null
+    (global column-name search across all tables).
+    """
+
+    source_table: Optional[str] = Field(
+        None,
+        description="Source table, or null when searching globally by column name",
+    )
+    source_column: str = Field(..., description="Column name that is changing")
+    severity: str = Field(
+        ...,
+        description="Impact severity: NONE | LOW | MEDIUM | HIGH | CRITICAL",
+    )
+    affected_tables: List[str] = Field(
+        default_factory=list,
+        description="Sorted list of all downstream tables that own affected columns",
+    )
+    affected_columns: List[ImpactedColumnDetail] = Field(
+        default_factory=list,
+        description="All downstream columns derived from the changed column",
+    )
+    impacted_dags: List[str] = Field(
+        default_factory=list,
+        description="Sorted list of distinct DAG IDs that must be re-evaluated",
+    )
+    total_hops: int = Field(..., description="Total column-lineage edges traversed")
+    depth_limit: int = Field(..., description="Maximum depth cap used in the query")
+    dag_details: List[ImpactedDAGDetail] = Field(
+        default_factory=list,
+        description="Per-DAG breakdown of which table at which depth was affected",
+    )
+
