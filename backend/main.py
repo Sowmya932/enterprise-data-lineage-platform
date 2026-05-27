@@ -7,6 +7,7 @@ from backend.api.dag_lineage import router as dag_lineage_router
 from backend.api.impact import router as impact_router
 from backend.api.lineage import router as lineage_router
 from backend.api.metadata import router as metadata_router
+from backend.api.search import router as search_router
 from backend.database.db import Base, engine
 
 # Ensure ORM models are registered with Base before create_all
@@ -49,6 +50,7 @@ app = FastAPI(
 app.include_router(lineage_router)
 app.include_router(dag_lineage_router)
 app.include_router(metadata_router)
+app.include_router(search_router)
 app.include_router(column_lineage_router)
 app.include_router(impact_router)
 
