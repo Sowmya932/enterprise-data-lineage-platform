@@ -1,0 +1,383 @@
+:root {
+  --bg: #f7f4ef;
+  --bg-alt: #ece4d8;
+  --panel: #ffffff;
+  --text: #12263a;
+  --muted: #4a5f72;
+  --teal: #00877c;
+  --amber: #d18500;
+  --blue: #1a6ae3;
+  --coral: #d2452d;
+  --ring: rgba(26, 106, 227, 0.25);
+  --radius: 16px;
+  --shadow: 0 10px 32px rgba(18, 38, 58, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 10% 10%, #fff9ed 0%, transparent 35%),
+    radial-gradient(circle at 90% 15%, #e7f7f5 0%, transparent 35%),
+    linear-gradient(130deg, var(--bg) 0%, var(--bg-alt) 100%);
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-family: 'Space Grotesk', sans-serif;
+  letter-spacing: 0.01em;
+}
+
+p {
+  margin: 0;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 290px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: linear-gradient(180deg, #11253b 0%, #0e1c2f 100%);
+  color: #f4f8fc;
+  padding: 28px 20px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.brand-block {
+  margin-bottom: 32px;
+}
+
+.brand-kicker {
+  opacity: 0.8;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.brand-block h1 {
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.side-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.side-link {
+  text-decoration: none;
+  color: #d3dde6;
+  padding: 11px 12px;
+  border-radius: 10px;
+  transition: 180ms ease;
+}
+
+.side-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.side-link-active {
+  background: rgba(0, 135, 124, 0.32);
+  color: #ffffff;
+}
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  padding: 24px 32px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  animation: slideDown 400ms ease;
+}
+
+.header-kicker {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
+.app-header h2 {
+  font-size: 30px;
+}
+
+.header-meta {
+  background: var(--panel);
+  border-radius: 999px;
+  padding: 8px 14px;
+  box-shadow: var(--shadow);
+  color: var(--muted);
+}
+
+.main-content {
+  padding: 14px 32px 32px;
+}
+
+.page-section {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: riseIn 450ms ease;
+}
+
+.section-head p {
+  margin-top: 7px;
+  color: var(--muted);
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+}
+
+.summary-card {
+  border-radius: var(--radius);
+  padding: 18px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  border-top: 4px solid var(--teal);
+}
+
+.summary-card p {
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.summary-card strong {
+  font-size: 32px;
+}
+
+.summary-amber {
+  border-top-color: var(--amber);
+}
+
+.summary-coral {
+  border-top-color: var(--coral);
+}
+
+.summary-blue {
+  border-top-color: var(--blue);
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.panel-grid-single {
+  grid-template-columns: 1fr;
+}
+
+.panel {
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+.panel h4 {
+  margin-bottom: 12px;
+}
+
+.panel ul {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 7px;
+}
+
+.control-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  align-items: end;
+  background: var(--panel);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+input,
+select,
+button {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #cfdae6;
+  font: inherit;
+  padding: 10px 11px;
+}
+
+input:focus,
+select:focus,
+button:focus {
+  outline: 3px solid var(--ring);
+  border-color: var(--blue);
+}
+
+button {
+  background: linear-gradient(135deg, #1a6ae3 0%, #0f5dd0 100%);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: transform 150ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+.button-secondary {
+  background: #dfe9f7;
+  color: #163659;
+  border: 1px solid #b9cee6;
+}
+
+.state-box {
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.state-error {
+  border: 1px solid #f3b3a9;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 3px solid #d7e3f5;
+  border-top-color: var(--blue);
+  animation: spin 900ms linear infinite;
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.chip {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 13px;
+  background: #e8f4f2;
+  color: #115550;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 540px;
+}
+
+th,
+td {
+  text-align: left;
+  border-bottom: 1px solid #e6ecf3;
+  padding: 9px 7px;
+  font-size: 14px;
+}
+
+th {
+  color: var(--muted);
+}
+
+.severity {
+  font-weight: 700;
+  color: #8e2b15;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 960px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    height: auto;
+    position: static;
+  }
+
+  .side-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
+
+  .app-header,
+  .main-content {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .app-header h2 {
+    font-size: 24px;
+  }
+}
