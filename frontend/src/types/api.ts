@@ -59,6 +59,11 @@ export interface MetadataResponse {
   };
 }
 
+export interface LineageDependenciesResponse {
+  lineage_edges: LineageRelationship[];
+  task_edges: TaskDependency[];
+}
+
 export interface PaginationMeta {
   total: number;
   limit: number;

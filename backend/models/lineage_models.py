@@ -403,7 +403,7 @@ class ColumnParseSQLResponse(BaseModel):
     error: Optional[str] = None
 
 
-class TransformationTypeStat(BaseModel):
+TransformationTypeStat(BaseModel):
     """One row of the transformation-type summary."""
 
     transformation_type: str

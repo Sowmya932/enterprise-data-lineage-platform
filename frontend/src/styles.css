@@ -327,6 +327,138 @@ th {
   color: #8e2b15;
 }
 
+.lineage-graph-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.lineage-graph-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.lineage-inline-form {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  flex: 1;
+}
+
+.lineage-inline-form label {
+  min-width: 260px;
+}
+
+.lineage-toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.lineage-toolbar-button {
+  min-width: 110px;
+}
+
+.lineage-stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lineage-stat-row span {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: #eef3f9;
+  color: #213d5b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.lineage-help-text {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.lineage-graph-canvas {
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid #d6e1ee;
+  box-shadow: var(--shadow);
+  background: linear-gradient(180deg, #f4f8fd 0%, #edf3fa 100%);
+  height: min(68vh, 760px);
+  min-height: 500px;
+}
+
+.lineage-node {
+  border-radius: 12px;
+  border-width: 2px;
+  border-style: solid;
+  box-shadow: 0 6px 18px rgba(17, 37, 59, 0.15);
+  font-family: 'Space Grotesk', sans-serif;
+  min-width: 170px;
+}
+
+.lineage-node-table {
+  border-color: #187568;
+  background: #e4faf6;
+  color: #0e3f38;
+}
+
+.lineage-node-column {
+  border-color: #1f5f9a;
+  background: #e7f0fb;
+  color: #173c65;
+  min-width: 145px;
+}
+
+.lineage-node-dag {
+  border-color: #b85b24;
+  background: #fef0e4;
+  color: #663016;
+  min-width: 140px;
+}
+
+.lineage-edge-table {
+  stroke: #0b7f75;
+}
+
+.lineage-edge-column {
+  stroke: #1f5f9a;
+}
+
+.lineage-edge-dag {
+  stroke: #b85b24;
+  stroke-dasharray: 6 4;
+}
+
+.lineage-edge-membership {
+  stroke: #8ea5bd;
+  stroke-dasharray: 3 3;
+}
+
+.lineage-selected-panel {
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 10px;
+  border: 1px solid #d6e1ee;
+  padding: 8px;
+  min-width: 210px;
+}
+
+.lineage-selected-panel p {
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #294868;
+}
+
+.lineage-selected-actions {
+  display: flex;
+  gap: 8px;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -379,5 +511,23 @@ th {
 
   .app-header h2 {
     font-size: 24px;
+  }
+
+  .lineage-inline-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .lineage-inline-form label {
+    min-width: 0;
+  }
+
+  .lineage-toolbar-actions {
+    width: 100%;
+  }
+
+  .lineage-graph-canvas {
+    min-height: 420px;
+    height: 62vh;
   }
 }

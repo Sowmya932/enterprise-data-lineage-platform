@@ -1,8 +1,14 @@
 import { apiClient } from './apiClient';
 import type {
+  LineageDependenciesResponse,
   DownstreamLineageResponse,
   UpstreamLineageResponse,
 } from '../types/api';
+
+export async function getLineageDependencies(): Promise<LineageDependenciesResponse> {
+  const { data } = await apiClient.get<LineageDependenciesResponse>('/lineage');
+  return data;
+}
 
 export async function getUpstreamLineage(
   tableName: string,
