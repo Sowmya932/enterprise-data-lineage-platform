@@ -79,6 +79,125 @@ export interface SearchResponse<T> {
   items: T[];
 }
 
+export type MetadataAssetType = 'table' | 'column' | 'dag';
+
+export interface MetadataAsset {
+  id: string;
+  type: MetadataAssetType;
+  title: string;
+  subtitle?: string;
+  tableName?: string;
+  columnName?: string;
+  dagId?: string;
+  record?: TableRecord | ColumnRecord | DagRecord;
+}
+
+export interface MetadataSuggestion {
+  id: string;
+  label: string;
+  description?: string;
+  type: MetadataAssetType;
+  asset: MetadataAsset;
+}
+
+export interface ColumnLineageEdge {
+  source_table: string;
+  source_column: string;
+  target_table: string;
+  target_column: string;
+  transformation?: string | null;
+  transformation_type: string;
+  dag_id?: string | null;
+  depth: number;
+}
+
+export interface ColumnUpstreamResponse {
+  table: string;
+  column: string;
+  direction: 'upstream';
+  depth_limit: number;
+  total_edges: number;
+  upstream_columns: string[];
+  lineage_chain: ColumnLineageEdge[];
+}
+
+export interface ColumnDownstreamResponse {
+  table: string;
+  column: string;
+  direction: 'downstream';
+  depth_limit: number;
+  total_edges: number;
+  downstream_columns: string[];
+  lineage_chain: ColumnLineageEdge[];
+}
+
+export interface TableMetadataDetails {
+  table: TableRecord;
+  columns: ColumnRecord[];
+  lineage_relationships: LineageRelationship[];
+  dependencies: {
+    upstream: UpstreamLineageResponse;
+    downstream: DownstreamLineageResponse;
+  };
+  related_dags: DagRecord[];
+  impact_metadata: TableImpactResponse;
+}
+
+export interface ColumnMetadataDetails {
+  column_name: string;
+  table_filter?: string | null;
+  matched_tables: string[];
+  column_records: ColumnRecord[];
+  lineage_relationships: ColumnLineageEdge[];
+  dependencies: {
+    upstream: ColumnUpstreamResponse;
+    downstream: ColumnDownstreamResponse;
+  };
+  related_dags: DagRecord[];
+  impact_metadata: ColumnImpactResponse;
+}
+
+export interface DagTaskRecord {
+  id: number;
+  dag_id: number;
+  task_id: string;
+  created_at?: string | null;
+}
+
+export interface DagMetadataDetails {
+  dag: DagRecord;
+  tasks: DagTaskRecord[];
+  task_dependencies: TaskDependency[];
+  lineage_relationships: {
+    table_level: LineageRelationship[];
+    column_level: ColumnLineageEdge[];
+  };
+  dependencies: {
+    task_dependency_count: number;
+    related_table_count: number;
+    related_tables: string[];
+  };
+  related_dags: DagRecord[];
+  impact_metadata: {
+    related_table_impacts: Record<string, TableImpactResponse>;
+    total_related_tables: number;
+  };
+}
+
+export type MetadataDetails = TableMetadataDetails | ColumnMetadataDetails | DagMetadataDetails;
+
+export interface MetadataSearchBundle {
+  query: string;
+  results: MetadataAsset[];
+  byType: {
+    tables: MetadataAsset[];
+    columns: MetadataAsset[];
+    dags: MetadataAsset[];
+  };
+  suggestions: MetadataSuggestion[];
+  total: number;
+}
+
 export interface RecursiveLineageEdge {
   source_table: string;
   target_table: string;
