@@ -15,6 +15,9 @@ import ReactFlow, {
 } from 'reactflow';
 import ErrorState from './ErrorState';
 import LoadingState from './LoadingState';
+import SearchBar from './SearchBar';
+import { recordRecentLineageView } from '../services/activityService';
+import { logger } from '../services/logger';
 import {
   getDownstreamLineage,
   getLineageDependencies,
@@ -53,6 +56,7 @@ const MAX_TABLE_NODES = 360;
 const MAX_COLUMN_NODES = 760;
 const MAX_DAG_NODES = 240;
 const MAX_RENDER_EDGES = 3800;
+const EDGE_ANIMATION_LIMIT = 1400;
 
 function normalizeKey(value: string): string {
   return value.trim().toLowerCase();
@@ -597,6 +601,13 @@ function LineageGraphContent(): JSX.Element {
 
         setGraphData(mergedGraphData);
         buildAndRenderGraph(mergedGraphData);
+        recordRecentLineageView({ tableName: trimmedTable, direction });
+        logger.info('Expanded lineage graph', {
+          tableName: trimmedTable,
+          direction,
+          maxDepth,
+          totalEdges: mergedGraphData.lineage_edges.length,
+        });
 
         requestAnimationFrame(() => {
           reactFlow.fitView({ padding: 0.2, duration: 350 });
@@ -604,6 +615,11 @@ function LineageGraphContent(): JSX.Element {
       } catch (err) {
         const message = err instanceof Error ? err.message : `Failed to expand ${direction} lineage`;
         setError(message);
+        logger.error('Lineage expansion failed', {
+          tableName: trimmedTable,
+          direction,
+          message,
+        });
       } finally {
         setExpanding(null);
       }
@@ -646,15 +662,18 @@ function LineageGraphContent(): JSX.Element {
       return nodes;
     }
 
+    const connectedNodes = new Set<string>([selectedNodeId]);
+    edges.forEach((edge) => {
+      if (edge.source === selectedNodeId) {
+        connectedNodes.add(edge.target);
+      }
+      if (edge.target === selectedNodeId) {
+        connectedNodes.add(edge.source);
+      }
+    });
+
     return nodes.map((node) => {
-      const connected =
-        node.id === selectedNodeId ||
-        edges.some((edge) => {
-          return (
-            (edge.source === selectedNodeId && edge.target === node.id) ||
-            (edge.target === selectedNodeId && edge.source === node.id)
-          );
-        });
+      const connected = connectedNodes.has(node.id);
 
       return {
         ...node,
@@ -675,10 +694,11 @@ function LineageGraphContent(): JSX.Element {
     return edges.map((edge) => {
       const isConnected = edge.source === selectedNodeId || edge.target === selectedNodeId;
       const baseWidth = edge.data?.kind === 'membership' ? 1.1 : 1.8;
+      const animate = isConnected && edges.length <= EDGE_ANIMATION_LIMIT;
 
       return {
         ...edge,
-        animated: isConnected,
+        animated: animate,
         style: {
           ...edge.style,
           strokeWidth: isConnected ? baseWidth + 1.4 : baseWidth,
@@ -698,9 +718,8 @@ function LineageGraphContent(): JSX.Element {
   }, [edges.length, graphMeta.columnCount, graphMeta.dagCount, graphMeta.tableCount]);
 
   const handleSearchNode = useCallback(
-    (event: FormEvent): void => {
-      event.preventDefault();
-      const term = searchTerm.trim().toLowerCase();
+    (value: string): void => {
+      const term = value.trim().toLowerCase();
       if (!term) {
         return;
       }
@@ -718,7 +737,7 @@ function LineageGraphContent(): JSX.Element {
         duration: 450,
       });
     },
-    [nodes, reactFlow, searchTerm],
+    [nodes, reactFlow],
   );
 
   const handleResetGraph = useCallback((): void => {
@@ -790,20 +809,17 @@ function LineageGraphContent(): JSX.Element {
       </form>
 
       <div className="lineage-graph-toolbar panel">
-        <form className="lineage-inline-form" onSubmit={handleSearchNode}>
-          <label>
-            Search Node
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="table, column, or dag"
-            />
-          </label>
-          <button type="submit" className="lineage-toolbar-button">
-            Search
-          </button>
-        </form>
+        <div className="lineage-inline-form">
+          <SearchBar
+            placeholder="table, column, or dag"
+            submitLabel="Search"
+            initialValue={searchTerm}
+            onSearch={(query) => {
+              setSearchTerm(query);
+              handleSearchNode(query);
+            }}
+          />
+        </div>
 
         <div className="lineage-toolbar-actions">
           <button type="button" className="button-secondary" onClick={handleResetGraph}>
@@ -849,8 +865,8 @@ function LineageGraphContent(): JSX.Element {
         >
           <Background color="#c6d5e8" gap={20} size={1.1} />
           <MiniMap
-            zoomable
-            pannable
+            zoomable={nodes.length < 1000}
+            pannable={nodes.length < 1000}
             nodeColor={(node) => {
               if (node.data.kind === 'dag') {
                 return '#f29f67';

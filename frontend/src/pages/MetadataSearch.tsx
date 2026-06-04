@@ -24,6 +24,8 @@ import {
   getTableMetadataDetails,
   searchMetadataAssets,
 } from '../services/metadataSearchService';
+import { recordRecentSearch } from '../services/activityService';
+import { logger } from '../services/logger';
 import type {
   ColumnMetadataDetails,
   DagMetadataDetails,
@@ -185,12 +187,17 @@ function MetadataSearch(): JSX.Element {
         if (!isStale) {
           setBundle(nextBundle);
           setPage(1);
+          logger.debug('Metadata search loaded', {
+            query: debouncedQuery,
+            resultCount: nextBundle.total,
+          });
         }
       } catch (error) {
         if (!isStale) {
           const message = error instanceof Error ? error.message : 'Failed to search metadata.';
           setSearchError(message);
           setBundle(emptyBundle);
+          logger.error('Metadata search failed', { message, query: debouncedQuery });
         }
       } finally {
         if (!isStale) {
@@ -218,14 +225,24 @@ function MetadataSearch(): JSX.Element {
   const handleSelectAsset = async (asset: MetadataAsset): Promise<void> => {
     setSelectedAsset(asset);
     setLoadingDetails(true);
+    recordRecentSearch(asset);
 
     try {
       const payload = await fetchMetadataDetails(asset);
       setDetails(payload as TableMetadataDetails | ColumnMetadataDetails | DagMetadataDetails);
+      logger.info('Metadata asset selected', {
+        assetType: asset.type,
+        assetTitle: asset.title,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load asset details.';
       setSearchError(message);
       setDetails(null);
+      logger.error('Metadata detail fetch failed', {
+        message,
+        assetType: asset.type,
+        assetTitle: asset.title,
+      });
     } finally {
       setLoadingDetails(false);
     }

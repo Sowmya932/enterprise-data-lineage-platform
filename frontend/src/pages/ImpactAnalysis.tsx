@@ -20,9 +20,11 @@ import {
   Typography,
 } from '@mui/material';
 import ImpactDependencyGraph from '../components/impact/ImpactDependencyGraph';
-import ImpactSeverityBadge from '../components/impact/ImpactSeverityBadge';
 import ImpactSummaryCards from '../components/impact/ImpactSummaryCards';
+import SeverityBadge from '../components/SeverityBadge';
+import { recordRecentImpact } from '../services/activityService';
 import { analyzeColumnImpact, analyzeTableImpact } from '../services/impactService';
+import { logger } from '../services/logger';
 import { searchColumns, searchTables } from '../services/searchService';
 import type {
   ColumnImpactResponse,
@@ -178,6 +180,11 @@ function ImpactAnalysis(): JSX.Element {
         const response = await analyzeTableImpact(tableName.trim(), maxDepth);
         setTableResult(response);
         setColumnResult(null);
+        recordRecentImpact({
+          mode,
+          target: tableName.trim(),
+          severity: response.severity,
+        });
       } else {
         const response = await analyzeColumnImpact(columnName.trim(), {
           table: tableName.trim() || undefined,
@@ -185,12 +192,30 @@ function ImpactAnalysis(): JSX.Element {
         });
         setColumnResult(response);
         setTableResult(null);
+        recordRecentImpact({
+          mode,
+          target: columnName.trim(),
+          severity: response.severity,
+        });
       }
+
+      logger.info('Impact analysis completed', {
+        mode,
+        table: tableName,
+        column: columnName,
+        maxDepth,
+      });
     } catch (analysisError) {
       const message = analysisError instanceof Error ? analysisError.message : 'Impact analysis failed.';
       setError(message);
       setTableResult(null);
       setColumnResult(null);
+      logger.error('Impact analysis failed', {
+        message,
+        mode,
+        table: tableName,
+        column: columnName,
+      });
     } finally {
       setLoading(false);
     }
@@ -304,7 +329,7 @@ function ImpactAnalysis(): JSX.Element {
           <Typography variant="subtitle2" color="text.secondary">
             Severity Level
           </Typography>
-          <ImpactSeverityBadge severity={severity} />
+          <SeverityBadge severity={severity} />
           <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
             {severityScale.map((level) => (
@@ -399,7 +424,7 @@ function ImpactAnalysis(): JSX.Element {
                   <TableCell>{item.depth}</TableCell>
                   <TableCell>{item.transformation_type}</TableCell>
                   <TableCell>
-                    <ImpactSeverityBadge severity={severity} compact />
+                    <SeverityBadge severity={severity} compact />
                   </TableCell>
                 </TableRow>
               ))}

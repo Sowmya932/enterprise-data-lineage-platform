@@ -122,6 +122,25 @@ p {
   font-size: 30px;
 }
 
+.breadcrumbs {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+
+.breadcrumbs a {
+  color: #245386;
+  text-decoration: none;
+}
+
+.breadcrumbs a:hover {
+  text-decoration: underline;
+}
+
 .header-meta {
   background: var(--panel);
   border-radius: 999px;
@@ -158,6 +177,41 @@ p {
   background: var(--panel);
   box-shadow: var(--shadow);
   border-top: 4px solid var(--teal);
+}
+
+.metric-card {
+  border-radius: var(--radius);
+  padding: 18px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  border-top: 4px solid var(--teal);
+  display: grid;
+  gap: 6px;
+}
+
+.metric-card p {
+  color: var(--muted);
+}
+
+.metric-card strong {
+  font-size: 32px;
+}
+
+.metric-card small {
+  color: #607386;
+  font-size: 12px;
+}
+
+.metric-amber {
+  border-top-color: var(--amber);
+}
+
+.metric-coral {
+  border-top-color: var(--coral);
+}
+
+.metric-blue {
+  border-top-color: var(--blue);
 }
 
 .summary-card p {
@@ -207,6 +261,46 @@ p {
   padding-left: 16px;
   display: grid;
   gap: 7px;
+}
+
+.dependency-panel ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.dependency-panel li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px dashed #d7e1eb;
+  padding-bottom: 6px;
+}
+
+.panel-empty-text {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.button-link {
+  display: inline-block;
+  padding: 10px 14px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: #173c65;
+  background: #dfe9f7;
+  border: 1px solid #b9cee6;
+}
+
+.searchbar {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  width: 100%;
+}
+
+.searchbar-button {
+  min-width: 110px;
 }
 
 .control-form {

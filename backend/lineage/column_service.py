@@ -75,9 +75,12 @@ _AGG_MAP: Dict[type, str] = {
     exp.Avg: AGG_AVG,
     exp.Max: AGG_MAX,
     exp.Min: AGG_MIN,
-    # common aliases
-    exp.Average: AGG_AVG,
 }
+
+# sqlglot renamed/removed some aggregate classes across versions.
+_average_expr = getattr(exp, "Average", None)
+if _average_expr is not None:
+    _AGG_MAP[_average_expr] = AGG_AVG
 
 _ALL_AGG_TYPES = tuple(_AGG_MAP.keys())
 

@@ -1,5 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import type { ApiErrorResponse } from '../types/api';
+import { logger } from './logger';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
@@ -21,8 +22,23 @@ export const apiClient = axios.create({
   },
 });
 
+apiClient.interceptors.request.use((config) => {
+  logger.debug('API request', {
+    method: config.method,
+    url: config.url,
+  });
+  return config;
+});
+
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    logger.debug('API response', {
+      method: response.config.method,
+      url: response.config.url,
+      status: response.status,
+    });
+    return response;
+  },
   (error: AxiosError<ApiErrorResponse>) => {
     const message =
       error.response?.data?.error_message ??
@@ -30,6 +46,13 @@ apiClient.interceptors.response.use(
       error.response?.data?.message ??
       error.message ??
       'Unexpected API error';
+
+    logger.error('API response error', {
+      method: error.config?.method,
+      url: error.config?.url,
+      status: error.response?.status,
+      message,
+    });
 
     return Promise.reject(new ApiError(message, error.response?.status));
   },

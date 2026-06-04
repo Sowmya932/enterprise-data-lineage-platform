@@ -1,4 +1,7 @@
-import LineageGraph from '../components/LineageGraph';
+import { Suspense, lazy } from 'react';
+import LoadingState from '../components/LoadingState';
+
+const LineageGraph = lazy(() => import('../components/LineageGraph'));
 
 function LineageExplorerPage(): JSX.Element {
   return (
@@ -10,7 +13,9 @@ function LineageExplorerPage(): JSX.Element {
           click-driven lineage expansion.
         </p>
       </div>
-      <LineageGraph />
+      <Suspense fallback={<LoadingState label="Loading lineage explorer..." />}>
+        <LineageGraph />
+      </Suspense>
     </section>
   );
 }
