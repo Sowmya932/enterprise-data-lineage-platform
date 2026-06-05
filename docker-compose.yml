@@ -2,17 +2,64 @@ version: '3.9'
 
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
+    container_name: lineage-postgres
     environment:
-      POSTGRES_DB: lineage_platform
-      POSTGRES_USER: lineage_user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:-lineage_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-lineage_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
     ports:
-      - "5432:5432"
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-lineage_user} -d ${POSTGRES_DB:-lineage_platform}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   backend:
-    build: .
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: lineage-backend
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://lineage_user:password@postgres:5432/lineage_platform}
+      APP_ENV: ${APP_ENV:-production}
+      API_BASE_URL: ${API_BASE_URL:-http://backend:8000}
     ports:
-      - "8000:8000"
+      - '8000:8000'
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs', timeout=5)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+    container_name: lineage-frontend
+    ports:
+      - '3000:80'
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'wget --quiet --tries=1 --spider http://localhost || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  postgres_data:
